@@ -1,0 +1,183 @@
+---
+title: "DSE1002_Project1"
+author: "Aidan Campbell"
+date: "2026-10-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readxl) #load libraries
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+```
+
+
+
+```{r}
+hitting <- read.csv("C:/Users/aidan/OneDrive/Desktop/DSE1002/2016-2026_Hitting.csv")%>% #read in csv file containing the data set and rename it
+  mutate(difference = batting_avg - xba) #creates new column 'difference' that shows the difference between real results and expected results
+
+head(hitting) #displays first 6 rows of data set
+```
+
+```{r}
+ggplot(data = filter(hitting, year == "2024"), aes(x = batting_avg, y = xba)) + #creates a graph using the hitting dataset in the year 2024 with batting average and expected batting average
+  geom_point(aes(color = difference), size = 3.5)+ #makes graph a scatter plot, colors scatter plot by difference, increases size of points
+  geom_smooth(method=lm)+ #Creates a line best fit to the data
+  labs(title = "Batting Average vs Expected Batting Average",#Adds title
+    subtitle = "In The 2024 Regular Season",   #Adds subtitle
+    x = "Batting Average",          #Adds label on X axis
+    y = "Expected Batting Average",  #Adds label on Y-Axis
+    # color = "Difference", #Adds a legend key for the color 
+    caption = "Comparing the difference in expected results versus real results")
+```
+##After observing this graph there is a weird trend where points above the line have negative differences (performed below expected) and points below the line performed above expectations can we dive into the unluckiest people on here (the ones above the line with high expected results but low real results) and see if they had better results in the following year.
+
+
+##Research Question 1: Did the unluckiest hitters (in terms of batting average compared to expected batting average) in 2024 have "luckier" seasons in 2025?
+```{r}
+Unlucky2024 <- hitting %>% #Create new dataset
+  filter(year == 2024)%>% #filter to use only data from 2024
+  filter(player_id != 666624)%>% #Removes Christopher Morel who does not appear in 2025
+  select(name, year,player_id, xba, batting_avg, difference, on_base_plus_slg)%>% #selects relevant columns for the research questions
+  arrange(difference) #arranges the data set to be in order of difference (unluckiest to luckiest)
+  
+head(Unlucky2024, 5) #displays the top 5 unluckiest hitters
+```
+
+```{r}
+results2025 <- hitting%>% #creates data frame for 2025
+  filter(year == 2025)%>% #filters to 2025
+  filter(player_id %in% c(672580, 630105, 665742, 543807, 607043))%>% #filters out every player except the top 5 unluckiest players in 2024
+  select(name,year, player_id, xba, batting_avg, difference, on_base_plus_slg)%>% #selects relevant columns
+  arrange(difference) #sorts in order of unluckiest players
+
+print(results2025) #displays the data set
+  
+```
+
+```{r}
+UnluckyHitting <- full_join(head(Unlucky2024,5), results2025) #merges the two data sets together
+print(UnluckyHitting) #displays the conjoined data sets
+```
+
+```{r}
+UnluckyHitting2 <- UnluckyHitting%>% #recreates the unlucky hitting data set
+  pivot_wider(id_cols = c(name, player_id), 
+    names_from = year,
+    values_from = c(xba, batting_avg)) %>% #reforms the data to be easier to read and pull from (AI/Google was used to find this function and understand it)
+  mutate(difference_2024 = batting_avg_2024 - xba_2024, #recreates the difference column to be specific to 2024
+    difference_2025 = batting_avg_2025 - xba_2025) %>% #recreates the difference column to be specific to 2025
+  select(name, player_id,xba_2025, batting_avg_2025, difference_2025, xba_2024, batting_avg_2024, difference_2024) #selects relevant columns
+
+print(UnluckyHitting2) #prints new data set
+```
+
+
+##The Null hypothesis is that there is no difference in luck between years meaning that this is just who these players are. The alternative hypothesis is that the players had luckier results in 2025 meaning that 2024 was more of a fluke and less of a certainty of who this player is. 
+
+#The statistical test I am running is a paired t-test because we are comparing the means of the same set of players in one specific statistic between 2 years.
+
+#We are running this test at a 0.05 significance level
+```{r}
+t.test(UnluckyHitting2$difference_2025, UnluckyHitting2$difference_2024, paired = TRUE, alternative = "greater", conf.level = 0.95) #run a paired t-test comparing the 2025 difference and 2024 difference to see if the mean if the 5 unluckiest hitters in 2024 were as unluckier, unluckier, or luckier (alternative hypothesis) in 2025
+```
+
+```{r}
+ggplot(data = UnluckyHitting2, aes(x = batting_avg_2024, y = xba_2024))+ #create graph for 2024 data
+  geom_point(aes(color = name), size = 4)+ #create scatterplot colored by name
+  geom_smooth(method=lm)+ #Creates a line best fit to the data
+  labs(title    = "Batting Average vs Expected Batting Average",#Adds title
+    subtitle = "In The 2024 Regular Season, Displaying the 5 'Unluckiest' hitters in 2024",   #Adds subtitle
+    x = "Batting Average",          #Adds label on X axis
+    y = "Expected Batting Average",  #Adds label on Y-Axis
+    color = "Player", #Adds a legend key for the color 
+    caption = "Comparing the difference in expected results versus real results")
+```
+
+```{r}
+ggplot(data = UnluckyHitting2, aes(x = batting_avg_2025, y = xba_2025))+ #create graph for 2025 data
+  geom_point(aes(color = name), size = 4)+ #create scatter plot colored by name
+  geom_smooth(method=lm)+ #Creates a line best fit to the data
+  labs(title    = "Batting Average vs Expected Batting Average",#Adds title
+    subtitle = "In The 2025 Regular Season, Displaying the 5 'Unluckiest' hitters in 2024",   #Adds subtitle
+    x = "Batting Average",          #Adds label on X axis
+    y = "Expected Batting Average",  #Adds label on Y-Axis
+    color = "XBA", #Adds a legend key for the color 
+    caption = "Comparing the difference in expected results versus real results")
+```
+
+##Because the p value in our hypothesis test is less than 0.05 (0.01) we reject the null hypothesis and accept the alternative hypothesis that the unluckiest players in 2024 collectively had luckier seasons in 2025 and therefore progressed back towards their expected results
+
+#After reviewing the data and graphs made we can see that the 5 unluckiest players in 2024 had much better results in 2025 outside of Juan Soto. Explaining the Juan Soto situation in plain English is pretty easy: Juan Soto is a top 5 player in baseball and is so amazing that expected statistics expect him to be EVEN better than he already is.
+
+
+
+```{r}
+ggplot(data = hitting, aes(x = age, y = on_base_plus_slg, group = age))+ #create graph using the hitting data set and more specifically the age category and OPS statistic, grouping the data by age
+  geom_boxplot()+ #create boxplot 
+  labs(title    = "Player OPS by Age", #Adds title
+    subtitle = "In the 2026 Season",   #Adds subtitle
+    x = "Player Age",  #Adds label on X axis
+    y = "OPS",  #Adds label on Y-Axis
+    caption = "x")
+
+```
+
+
+##After viewing the box plot that shows OPS by age it shows decently consistent data between the ages of 25 and 30 which is typically described as the athletic prime for athletes.
+
+
+##Research Question 2: A player's prime is typically between the ages of 26 and 29. The league average OPS (On Base Percentage + Slugging Percentage) is 0.719. Let's say a significantly above average OPS is 0.750, is the average OPS of players in their primes significantly above average?
+```{r}
+prime2026 <- hitting %>% #create new data frame using the hitting data set
+  filter(year == 2026)%>% #use only the data from 2026
+  filter(age >= 26 & age <= 29)%>% #only keep players aged 26 through 29
+  select(name,year,age,on_base_plus_slg) #select relevant columns 
+
+head(prime2026) #print first 6 rows
+```
+
+
+#The null hypothesis is that players in their primes are not "significantly" greater than league average in terms of OPS (0.750) and the alternative hypothesis is that their average is greater than 0.750.
+
+#The test I plan on using is a one sample t-test because we are comparing one statistic to a set number (0.750)
+
+##This test is being ran at a 0.95 significance level
+
+```{r}
+t.test(prime2026$on_base_plus_slg, mu = 0.750, alternative = "greater",conf.level = 0.95) #Run a one sample t-test to see if the mean OPS of players in their prime is "significantly" higher than the league average OPS 
+```
+
+
+##Because the p-value is greater than 0.05 (0.25) we fail to reject the null hypothesis therefore declaring that the mean OPS of players in their primes is NOT significantly greater than the league average OPS
+
+```{r}
+t.test(prime2026$on_base_plus_slg, mu = 0.719, alternative = "greater",conf.level = 0.95) #Run a one sample t-test to see if the mean OPS of players in their primes have a higher OPS than the overall league average OPS
+```
+##When running a one sample t-test comparing the mean OPS of players in their primes to the league average OPS we get a p-value of less than 0.05 meaning that the mean OPS of players in their primes is greater than the league average, but not significantly greater (above 0.750).
+
+
+
+
+
+```{r}
+ggplot() + #create a graph
+  geom_point(data = filter(hitting, year == 2026), #Create a scatter plot using the hitting data from 2026
+    aes(x = age, y = on_base_plus_slg), #Plot the data by OPS and age 
+    color = "blue") + #color this data blue
+  geom_point(data = prime2026, #add a second section of data to the plot using the prime data set
+    aes(x = age, y = on_base_plus_slg), #graph the data with the same data as the hitting plot
+    color = "red")+ #color the prime data red
+  labs(title    = "OPS by age", #Adds title
+    subtitle = "In 2026",   #Adds subtitle
+    x = "Age",  #Adds label on X axis
+    y = "OPS",  #Adds label on Y-Axis
+    caption = "Highlighting the difference between the entire league (Blue) and players in their prime (Red)")
+```
+##This scatter plot shows 2026 hitters OPS and age, with the red portion being the hitters currently in their athletic prime. We know that the mean of the athletic prime group is around 0.030 higher than league average and this can help us visualize that a little bit with a high density between 0.700 and 0.900 including one outlier who sits at ~1.0750. We can also see that players aged 29, at the tail end of their prime, seem to be weighing down this data as a high percentage of them are around or under league average.
